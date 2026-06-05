@@ -27,6 +27,26 @@ export interface Review {
   analysis?: SentimentAnalysis
 }
 
+export interface Batch {
+  id: string
+  marketplace: string
+  category: string
+  count: number
+  fakePct: string
+  date: string
+  /** Origin of the data: 'Upload CSV' | 'Input manual' | 'Scrape API'. */
+  source: string
+  /** Classification model used for this batch. */
+  model: string
+  /** Who created the batch (no auth in the prototype — stamped from a constant). */
+  createdBy: string
+  /** Human-readable timestamp when the batch was created. */
+  createdAt: string
+  /** Human-readable timestamp when classification finished. */
+  processedAt: string
+  selected?: boolean
+}
+
 export interface Classification {
   label: ReviewLabel
   /**

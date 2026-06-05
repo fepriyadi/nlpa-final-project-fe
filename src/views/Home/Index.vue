@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import {
+  type Batch,
   type ClassifiedReview,
   type Review,
   type ReviewLabel,
@@ -29,7 +30,6 @@ import {
   pctID,
   suggestionFor,
 } from '@/lib/fake-review/classifier'
-import { SEED_BATCHES, SEED_REVIEWS } from '@/lib/fake-review/seed'
 import { type AnalyzeResult, analyzeBulk, analyzeOne, getModels } from '@/services/analysis'
 import { usePagination } from '@/lib/use-pagination'
 import { Button } from '@/components/ui/button'
@@ -93,13 +93,13 @@ const FILTERS: { value: FilterValue, label: string }[] = [
 ]
 
 /* ----------------- State ----------------- */
-const reviews = ref<Review[]>([...SEED_REVIEWS])
-const batches = ref([...SEED_BATCHES])
-const selectedBatchId = ref(batches.value.find(b => b.selected)?.id ?? batches.value[0]?.id)
+const reviews = ref<Review[]>([])
+const batches = ref<Batch[]>([])
+const selectedBatchId = ref<string | undefined>(undefined)
 const currentFilter = ref<FilterValue>('all')
 const searchQ = ref('')
-let nextId = SEED_REVIEWS.length + 1
-let nextBatchSeq = 43
+let nextId = 1
+let nextBatchSeq = 1
 
 const selectedBatch = computed(() => batches.value.find(b => b.id === selectedBatchId.value))
 
@@ -498,6 +498,9 @@ watch(modalOpen, (open) => {
         </div>
 
         <ul class="flex-1 overflow-auto scroll-thin p-2 space-y-1">
+          <li v-if="!batches.length" class="px-3 py-6 text-center text-[11.5px] text-slate-400 leading-relaxed">
+            Belum ada batch. Tambah review atau upload CSV untuk memulai.
+          </li>
           <li v-for="b in batches" :key="b.id">
             <button
               type="button"
@@ -543,7 +546,7 @@ watch(modalOpen, (open) => {
       <!-- Main panel -->
       <main ref="mainScroll" class="flex-1 overflow-auto scroll-thin p-5 bg-[#f6f7f9] min-w-0">
         <!-- Selected batch header -->
-        <section class="bg-white border border-gray-200 rounded-xl px-5 py-4 mb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <section v-if="selectedBatch" class="bg-white border border-gray-200 rounded-xl px-5 py-4 mb-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div class="min-w-0">
             <div class="flex items-center gap-2 mb-1">
               <h2 class="text-[15px] font-bold text-slate-900 tracking-tight">{{ selectedBatch?.id }}</h2>
@@ -590,6 +593,33 @@ watch(modalOpen, (open) => {
                 <Trash2 class="size-4" aria-hidden="true" />
               </Button>
             </div>
+          </div>
+        </section>
+
+        <!-- Empty state: no batch yet (seed data removed) -->
+        <section v-else class="bg-white border border-dashed border-gray-300 rounded-xl px-5 py-10 mb-4 text-center">
+          <h2 class="text-[15px] font-bold text-slate-900 tracking-tight mb-1">Belum ada batch deteksi</h2>
+          <p class="text-[12.5px] text-slate-500 mb-4">
+            Tambah review manual atau upload CSV untuk mulai menganalisis dengan model.
+          </p>
+          <div class="flex items-center justify-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              class="h-9 px-3 gap-1.5 border-slate-200 text-slate-700 hover:bg-slate-50"
+              @click="openUpload"
+            >
+              <Upload class="size-3.5" aria-hidden="true" />
+              Upload CSV
+            </Button>
+            <Button
+              type="button"
+              class="h-9 px-3 gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
+              @click="openModal"
+            >
+              <Plus class="size-3.5" aria-hidden="true" />
+              Tambah Review
+            </Button>
           </div>
         </section>
 
