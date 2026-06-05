@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useEventListener } from '@vueuse/core'
+import { type DateValue } from '@internationalized/date'
 import Papa from 'papaparse'
 import { toast } from 'vue-sonner'
 import {
@@ -42,6 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { DatePicker } from '@/components/ui/date-picker'
 
 const datasetChoice = ref('')
 const modelChoice = ref('')
@@ -60,10 +62,6 @@ onMounted(async () => {
   }
 })
 
-// No auth in the prototype, so "Oleh" (created-by) is stamped from a constant.
-// A real app would read this from the session/auth store.
-const currentUser = 'M. Iqbal'
-
 // Adapt the API's snake_case result to the camelCase shape stored on a Review.
 function toAnalysis(r: AnalyzeResult): SentimentAnalysis {
   return {
@@ -75,13 +73,6 @@ function toAnalysis(r: AnalyzeResult): SentimentAnalysis {
 }
 
 const dateFmt = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-const dateTimeFmt = new Intl.DateTimeFormat('id-ID', {
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
 
 type FilterValue = 'all' | ReviewLabel
 
@@ -111,6 +102,8 @@ function createBatch(newReviews: Review[], source: string) {
   const now = new Date()
   const fakeCount = newReviews.filter(r => classifyReview(r).label !== 'genuine').length
   const id = `BATCH-2026-${String(nextBatchSeq++).padStart(4, '0')}`
+  // Tag every review with this batch so the table can show one batch at a time.
+  for (const r of newReviews) r.batchId = id
   batches.value.unshift({
     id,
     marketplace: datasetChoice.value.trim() || '—',
@@ -120,9 +113,6 @@ function createBatch(newReviews: Review[], source: string) {
     date: dateFmt.format(now),
     source,
     model: modelChoice.value,
-    createdBy: currentUser,
-    createdAt: dateTimeFmt.format(now),
-    processedAt: dateTimeFmt.format(now),
     selected: true,
   })
   selectedBatchId.value = id
@@ -133,9 +123,15 @@ const classified = computed<ClassifiedReview[]>(() =>
   reviews.value.map(r => ({ ...r, ...classifyReview(r) })),
 )
 
+// Reviews belonging to the currently selected batch — manual entries and CSV
+// uploads each form their own batch, so the table never mixes them.
+const batchReviews = computed(() =>
+  classified.value.filter(r => r.batchId === selectedBatchId.value),
+)
+
 const filtered = computed(() => {
   const q = searchQ.value.trim().toLowerCase()
-  return classified.value.filter((r) => {
+  return batchReviews.value.filter((r) => {
     if (currentFilter.value !== 'all' && r.label !== currentFilter.value) return false
     if (q) {
       return (
@@ -171,7 +167,7 @@ watch(totalPages, (max) => {
 })
 
 const summary = computed(() => {
-  const list = classified.value
+  const list = batchReviews.value
   const total = list.length
   const genuine = list.filter(r => r.label === 'genuine').length
   const fake = total - genuine
@@ -209,7 +205,9 @@ function markLabel(label: ReviewLabel) {
 /* ----------------- Add review modal ----------------- */
 const modalOpen = ref(false)
 const submitting = ref(false)
-const form = ref({ username: '', rating: 0, text: '', product: '', date: '' })
+const form = ref({ username: '', rating: 0, text: '', product: '' })
+// Date is held as a DateValue for the DatePicker component (not a string).
+const reviewDate = ref<DateValue>()
 const ratingLabels = ['', 'Sangat buruk', 'Buruk', 'Cukup', 'Baik', 'Sangat baik']
 
 function focusUsername() {
@@ -217,7 +215,8 @@ function focusUsername() {
 }
 
 function openModal() {
-  form.value = { username: '', rating: 0, text: '', product: '', date: '' }
+  form.value = { username: '', rating: 0, text: '', product: '' }
+  reviewDate.value = undefined
   datasetChoice.value = ''
   categoryChoice.value = ''
   modalOpen.value = true
@@ -251,7 +250,7 @@ async function submitAdd() {
       rating,
       text,
       product: form.value.product.trim() || '—',
-      date: form.value.date || new Date().toISOString().slice(0, 10),
+      date: reviewDate.value?.toString() || new Date().toISOString().slice(0, 10),
       analysis: toAnalysis(result),
     }
     reviews.value.unshift(review)
@@ -476,11 +475,6 @@ watch(modalOpen, (open) => {
       </Button>
     </header>
 
-    <!-- Hidden file input lives outside the auto-hiding header: when the header
-         collapses it gets `pointer-events-none`, which would block the first
-         programmatic fileRef.click() from the upload dialog. -->
-    <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onFileChange">
-
     <!-- Body -->
     <div class="flex-1 flex min-h-0">
       <!-- Sidebar: batch list -->
@@ -527,24 +521,6 @@ watch(modalOpen, (open) => {
             </button>
           </li>
         </ul>
-
-        <div class="border-t border-slate-100 px-3 py-3 text-[11px] text-slate-500 leading-relaxed">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="font-semibold text-slate-600">Akurasi model</span>
-            <span class="tabular-nums text-slate-900 font-semibold">92,4%</span>
-          </div>
-          <div
-            class="h-1.5 rounded-full bg-slate-100 overflow-hidden"
-            role="progressbar"
-            aria-label="Akurasi model"
-            aria-valuenow="92"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <div class="h-full bg-emerald-500" style="width:92.4%" />
-          </div>
-          <div class="mt-2 text-[10.5px] text-slate-400">F1: 0.91 · Precision: 0.93 · Recall: 0.89</div>
-        </div>
       </aside>
 
       <!-- Main panel -->
@@ -561,20 +537,6 @@ watch(modalOpen, (open) => {
             </p>
           </div>
           <div class="flex items-center gap-4">
-            <dl class="flex flex-col gap-1 text-[11.5px] text-slate-600 text-right whitespace-nowrap">
-              <div class="flex gap-2">
-                <dt class="inline-block min-w-16 text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider text-left">Dibuat</dt>
-                <dd>{{ selectedBatch?.createdAt }}</dd>
-              </div>
-              <div class="flex gap-2">
-                <dt class="inline-block min-w-16 text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider text-left">Diproses</dt>
-                <dd>{{ selectedBatch?.processedAt }}</dd>
-              </div>
-              <div class="flex gap-2">
-                <dt class="inline-block min-w-16 text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider text-left">Oleh</dt>
-                <dd class="text-slate-900">{{ selectedBatch?.createdBy }}</dd>
-              </div>
-            </dl>
             <div class="flex items-center gap-1.5">
               <Button
                 type="button"
@@ -928,14 +890,23 @@ watch(modalOpen, (open) => {
               />
             </div>
 
-            <button
-              type="button"
-              class="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-5 py-8 text-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            <!-- Native <label>+<input> so clicking opens the file dialog with no
+                 JS .click() — avoids the picker being blocked on the first try. -->
+            <label
+              for="csv-file-input"
+              class="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-5 py-8 text-center cursor-pointer focus-within:ring-2 focus-within:ring-blue-500"
               :class="selectedFile
                 ? 'border-emerald-300 bg-emerald-50/50'
                 : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50/40'"
-              @click="fileRef?.click()"
             >
+              <input
+                id="csv-file-input"
+                ref="fileInput"
+                type="file"
+                accept=".csv,text/csv"
+                class="sr-only"
+                @change="onFileChange"
+              >
               <span
                 class="w-11 h-11 rounded-full flex items-center justify-center"
                 :class="selectedFile ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-50 text-blue-600'"
@@ -952,7 +923,7 @@ watch(modalOpen, (open) => {
                 <span class="text-[13px] font-semibold text-slate-900">Pilih file CSV</span>
                 <span class="text-[11.5px] text-slate-500">Header wajib: username, rating, review_text</span>
               </template>
-            </button>
+            </label>
 
             <p class="text-[11.5px] text-slate-500 leading-relaxed">
               Belum punya format file?
@@ -1142,14 +1113,14 @@ watch(modalOpen, (open) => {
                 />
               </div>
               <div>
-                <Label for="f-date" class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                <Label class="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
                   Tanggal <span class="text-slate-300 normal-case font-normal">(opsional)</span>
                 </Label>
-                <Input
-                  id="f-date"
-                  v-model="form.date"
-                  type="date"
-                  class="text-[13px]"
+                <DatePicker
+                  v-model="reviewDate"
+                  locale="id-ID"
+                  placeholder="Pilih tanggal"
+                  class="h-9 text-[13px] font-normal"
                 />
               </div>
             </div>

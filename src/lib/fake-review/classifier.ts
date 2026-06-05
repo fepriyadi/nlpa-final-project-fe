@@ -23,6 +23,8 @@ export interface Review {
   text: string
   product: string
   date: string
+  /** Id of the batch this review belongs to (set when its batch is created). */
+  batchId?: string
   /** Set when the review was scored by the API instead of the heuristic. */
   analysis?: SentimentAnalysis
 }
@@ -38,12 +40,6 @@ export interface Batch {
   source: string
   /** Classification model used for this batch. */
   model: string
-  /** Who created the batch (no auth in the prototype — stamped from a constant). */
-  createdBy: string
-  /** Human-readable timestamp when the batch was created. */
-  createdAt: string
-  /** Human-readable timestamp when classification finished. */
-  processedAt: string
   selected?: boolean
 }
 
