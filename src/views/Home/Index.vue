@@ -474,8 +474,12 @@ watch(modalOpen, (open) => {
         <Plus class="size-3.5" aria-hidden="true" />
         Tambah Review
       </Button>
-      <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onFileChange">
     </header>
+
+    <!-- Hidden file input lives outside the auto-hiding header: when the header
+         collapses it gets `pointer-events-none`, which would block the first
+         programmatic fileRef.click() from the upload dialog. -->
+    <input ref="fileInput" type="file" accept=".csv,text/csv" class="hidden" @change="onFileChange">
 
     <!-- Body -->
     <div class="flex-1 flex min-h-0">
